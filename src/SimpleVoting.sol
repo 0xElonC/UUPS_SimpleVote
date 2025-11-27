@@ -72,8 +72,9 @@ contract SimpleVoting is Initializable, UUPSUpgradeable{
     }
 
     /**
-     * 投票 对提案一个选项
+     * 对提案一个选项投票，会限制用户的投票次数
      * @param proposalId 提案ID
+     * @param optionId 选项ID
      */
      function vote(uint256 proposalId,uint256 optionId) external {
         Proposal storage p = proposals[proposalId];
@@ -83,6 +84,19 @@ contract SimpleVoting is Initializable, UUPSUpgradeable{
         p.options[optionId].voteCount += 1;
         p.hasVoted[msg.sender] = true;
 
+        emit Voted(msg.sender,proposalId,optionId);
+     }
+    /**
+     * 对提案一个选项投票，不会限制用户的投票次数
+     * @param proposalId 提案ID
+     * @param optionId 选项ID
+     */
+     function voteUnlimit(uint proposalId,uint256 optionId) external {
+        Proposal storage p = proposals[proposalId];
+        require(bytes(p.title).length !=0 ,"proposals not exist");
+        require(optionId > 0 && optionId <= p.optionCount,"Option not exist");
+        p.options[optionId].voteCount += 1;
+        p.hasVoted[msg.sender] = true;
         emit Voted(msg.sender,proposalId,optionId);
      }
 
@@ -96,7 +110,10 @@ contract SimpleVoting is Initializable, UUPSUpgradeable{
         require(optionId > 0 && optionId <= p.optionCount,"Option not exist");
         return p.options[optionId].voteCount;
     }
-
+    /**
+     * 获取提案的选项
+     * @param proposalId 提案ID
+     */
     function getOptions(uint256 proposalId) external view returns (Option[] memory){
         Proposal storage p = proposals[proposalId];
         Option[] memory result = new Option[](p.optionCount);
@@ -105,5 +122,14 @@ contract SimpleVoting is Initializable, UUPSUpgradeable{
             result[i-1] = o;
         }
         return result;
+    }
+    /**
+     * 获取提案名称
+     * @param proposalId 提案Id
+     */
+    function getProposalTitle(uint256 proposalId) external view returns (string memory title){
+        Proposal storage p = proposals[proposalId];
+        require(bytes(p.title).length != 0, "Proposal not exist");
+        return p.title;
     }
  }
