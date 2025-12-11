@@ -189,9 +189,10 @@ contract SimpleVotingV5 is Initializable, UUPSUpgradeable, SemaphoreGroups {
      * @param title 提案标题
      * @return proposalId 新创建的提案 ID
      *
-     * @dev V5 说明:
-     * - Group Admin 仍设置为 _owner（向后兼容）
-     * - 但 joinProposal 不再需要 Admin 权限（绕过检查）
+     * @dev V5 修复说明:
+     * - Group Admin 设置为合约自身 address(this)
+     * - 允许合约通过 semaphore.addMember() 添加成员
+     * - 确保 Semaphore 的 rootHistory 正确同步
      */
     function createProposal(
         string memory title
@@ -207,8 +208,8 @@ contract SimpleVotingV5 is Initializable, UUPSUpgradeable, SemaphoreGroups {
         p.createdAt = block.timestamp;
         p.isActive = true;  // 默认激活
 
-        // 创建对应的 Semaphore Group (Admin 仍为 _owner)
-        _createGroup(p.groupId, _owner);
+        // 🔑 关键修复: 将合约自身设为 group admin
+        _createGroup(p.groupId, address(this));
 
         emit ProposalCreated(proposalCount, title, p.groupId);
 
@@ -256,24 +257,20 @@ contract SimpleVotingV5 is Initializable, UUPSUpgradeable, SemaphoreGroups {
     // ========== 用户注册 (V5 核心改进) ==========
 
     /**
-     * @notice 用户自由加入提案 (V5 核心特性)
+     * @notice 用户自由加入提案 (V5 修复版本)
      * @param proposalId 提案 ID
      * @param identityCommitment 用户身份承诺 (Poseidon(privateKey))
      *
-     * @dev V5 核心改动:
-     * - 不再调用 _addMember (绕过 onlyGroupAdmin 权限检查)
-     * - 直接操作 Merkle Tree 底层数据结构
-     * - 任何人都可以自由加入激活的提案
-     * - 保持与 Semaphore 协议的完全兼容
+     * @dev V5 修复说明:
+     * - 通过 semaphore.addMember() 添加成员
+     * - 合约作为 group admin,有权限调用 addMember
+     * - 自动同步 Semaphore 的 merkleRootCreationDates (rootHistory)
+     * - 确保后续投票的 validateProof 能够识别新的 Merkle Root
      *
-     * @dev 安全考虑:
-     * - 仍然检查提案是否存在和是否激活
-     * - Merkle Tree 操作是安全的（Semaphore 原生数据结构）
-     * - 不会影响 ZK 证明的有效性
-     *
-     * @dev Gas 优化:
-     * - 比通过 _addMember 更省 gas（少一次权限检查）
-     * - 直接写入存储，避免额外的函数调用开销
+     * @dev 安全性:
+     * - 保留提案激活状态检查
+     * - 利用 Semaphore 标准流程,无安全风险
+     * - 用户仍可自由加入,无需预先授权
      */
     function joinProposal(
         uint256 proposalId,
@@ -283,15 +280,11 @@ contract SimpleVotingV5 is Initializable, UUPSUpgradeable, SemaphoreGroups {
         require(bytes(p.title).length != 0, "Proposal not exist");
         require(p.isActive, "Proposal not active");
 
-        // V5 核心实现：直接操作 Merkle Tree
-        // 不通过 _addMember，绕过 onlyGroupAdmin 修饰符
-        uint256 index = getMerkleTreeSize(p.groupId);
-        uint256 merkleTreeRoot = merkleTrees[p.groupId]._insert(identityCommitment);
+        // 🔑 关键修复: 调用 Semaphore 的 addMember
+        // 这会自动更新 Merkle Tree 和 rootHistory
+        semaphore.addMember(p.groupId, identityCommitment);
 
-        // 手动触发 Semaphore 兼容事件
-        emit MemberAdded(p.groupId, index, identityCommitment, merkleTreeRoot);
-
-        // V5 更新的事件（包含用户地址）
+        // V5 自定义事件(包含用户地址)
         emit MemberJoined(proposalId, p.groupId, identityCommitment, msg.sender);
     }
 
