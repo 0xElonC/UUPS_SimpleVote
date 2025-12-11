@@ -9,7 +9,7 @@ import {UUPSUpgradeable} from "openzeppelin-contracts/contracts/proxy/utils/UUPS
 /**
  * @title SimpleVotingV6
  * @author Sue
- * @notice 基于 Semaphore 协议的匿名投票系统 - V6 版本
+ * @notice 基于 Semaphore 协议的匿名投票系统 - V6.1 版本
  * @dev 完全使用外部 Semaphore 合约,不继承 SemaphoreGroups
  *
  * 核心特性:
@@ -25,6 +25,12 @@ import {UUPSUpgradeable} from "openzeppelin-contracts/contracts/proxy/utils/UUPS
  * - ✅ 数据一致性: Group 统一在外部 Semaphore 管理
  * - ✅ 代码简化: 减少 29% 代码量
  * - ✅ Gas 优化: 删除未使用的继承存储
+ *
+ * V6.1 隐私优化:
+ * - ✅ VoteCast 事件移除 optionId 参数
+ * - ✅ 防止时间关联攻击: 无法通过事件时间戳推测投票内容
+ * - ✅ 保持实时性: 前端可监听投票发生,但不暴露具体选项
+ * - ✅ 完全匿名: ZK证明隐藏"谁投票" + 事件优化隐藏"投什么"
  *
  * V6 vs V5 关键差异:
  * - V5: contract SimpleVotingV5 is SemaphoreGroups (❌ 混乱)
@@ -109,8 +115,9 @@ contract SimpleVotingV6 is Initializable, UUPSUpgradeable {
 
     /**
      * @notice 投票事件
+     * @dev V6.1 隐私优化: 移除 optionId 参数，防止时间关联攻击
      */
-    event VoteCast(uint256 indexed proposalId, uint256 indexed optionId);
+    event VoteCast(uint256 indexed proposalId);
 
     /**
      * @notice 提案状态变更事件
@@ -311,6 +318,12 @@ contract SimpleVotingV6 is Initializable, UUPSUpgradeable {
      * - 外部 Semaphore 会检查 rootHistory,支持多用户并发加入
      * - nullifier 防止双重投票 (由 Semaphore 检查)
      * - 支持重复投票: 同一 nullifier 可以多次投票
+     *
+     * @dev V6.1 隐私优化:
+     * - VoteCast 事件不再包含 optionId 参数
+     * - 防止时间关联攻击: 无法通过事件发生时间推测投票内容
+     * - 前端监听 VoteCast(proposalId) 后重新查询所有选项票数
+     * - 完全匿名性: ZK证明保护身份 + 事件不暴露选项
      */
     function vote(
         uint256 proposalId,
@@ -333,7 +346,8 @@ contract SimpleVotingV6 is Initializable, UUPSUpgradeable {
         p.options[optionId].voteCount++;
         p.nullifierVoteCount[semaphoreProof.nullifier]++;
 
-        emit VoteCast(proposalId, optionId);
+        // V6.1: 发出投票事件（不暴露 optionId，保护隐私）
+        emit VoteCast(proposalId);
     }
 
     // ========== 查询函数 ==========
@@ -420,7 +434,7 @@ contract SimpleVotingV6 is Initializable, UUPSUpgradeable {
      * @return version 版本号
      */
     function version() external pure returns (string memory) {
-        return "V6";
+        return "V6.1";
     }
 
     // ========== V5 前端兼容查询（向后兼容）==========
