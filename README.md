@@ -284,11 +284,12 @@ sequenceDiagram
 
 ---
 
-## 📞 联系方式
 
-- **作者**: Sue
-- **GitHub**: [Im-Sue](https://github.com/Im-Sue/)
-- **Telegram**: @Sue_muyu
+## 🙏 致谢
+
+- [LXDAO](https://lxdao.io/) - 社区支持
+- [Semaphore](https://semaphore.pse.dev/) - ZK 匿名信号协议参考
+- [Circom](https://docs.circom.io/) - ZK 电路语言
 
 ---
 
